@@ -3,8 +3,9 @@
 A responsive, competitive arrow-maze puzzle game.
 
 - **Solo mode** — 30 levels of increasing difficulty, each a deterministically
-  generated maze. Trace the path from start to finish with keyboard, mouse,
-  swipe, or an on-screen D-pad. Timed scoring gives 1–3 stars per level.
+  generated arrow board. Every tile has an arrow; tap one and it slides off
+  the board if its path to the edge is clear. Clear the whole board to win.
+  Timed scoring with a mistake counter gives 1–3 stars per level.
 - **Accounts** — email/password sign-up, public profile, avatar color,
   rating, win/loss record, best level reached.
 - **Arena** — search any player by username, see who's online right now, and
@@ -191,12 +192,17 @@ Vercel automatically; pushes to other branches get their own preview URL.
 
 ## 6. How the game works (for your own reference)
 
-- **Maze generation** (`src/lib/maze.ts`): a recursive-backtracker
-  perfect maze, seeded with `mulberry32`, so a given seed string always
-  produces the exact same maze — this is what lets two racers get an
-  identical board.
+- **Board generation** (`src/lib/arrowPuzzle.ts`): boards are seeded with
+  `mulberry32` so a given seed string always produces the exact same board —
+  this is what lets two racers get an identical puzzle. Every board is
+  **guaranteed solvable**: it's built by an "onion-peel" construction that
+  always picks a currently-exposed edge tile (topmost/bottommost in its
+  column, or leftmost/rightmost in its row) and assigns it a direction with a
+  provably clear lane, repeating until every tile has a direction. This also
+  produces the natural difficulty curve — more of the board becomes
+  "obviously movable" only as you clear tiles inward from the edges.
 - **Solo levels**: `levels` table stores `(seed, cols, rows, difficulty,
-  par_seconds)`. Completing one upserts a row in `scores` and, if it's your
+  par_seconds)`. Clearing one upserts a row in `scores` and, if it's your
   furthest level yet, bumps `profiles.best_level` (which unlocks the next
   level in `/dashboard`).
 - **Challenges**: `POST` (insert) into `challenges` with `status='pending'`.
@@ -204,11 +210,11 @@ Vercel automatically; pushes to other branches get their own preview URL.
   and shows an accept/decline modal (`ChallengeListener.tsx`). Accepting
   creates a `matches` row with a fresh shared seed and redirects both
   players to `/match/[id]`.
-- **Live race**: each move upserts `match_progress (match_id, user_id,
-  cell_x, cell_y)`; the opponent's browser is subscribed to that row and
-  renders a ghost token. First `finished_at` wins; `matches.winner` and
-  rating/win-loss counters are updated from the client using RLS-scoped
-  writes.
+- **Live race**: each cleared tile upserts `match_progress (match_id,
+  user_id, step)` where `step` is the tiles-cleared count; the opponent's
+  browser is subscribed to that row and renders a live progress bar. First
+  `finished_at` wins; `matches.winner` and rating/win-loss counters are
+  updated from the client using RLS-scoped writes.
 - **Presence**: `profiles.status` flips to `online` on load and every 30s
   heartbeat, and to `offline` via `navigator.sendBeacon` on tab close
   (`/api/presence/offline`).

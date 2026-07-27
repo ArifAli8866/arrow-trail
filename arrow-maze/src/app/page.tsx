@@ -37,8 +37,9 @@ export default function Home() {
               Race a friend.
             </h1>
             <p className="mt-5 max-w-md text-[var(--ink-dim)]">
-              Arrow Trail is a fast, responsive maze puzzle — trace the one true path from
-              start to finish, then challenge anyone online to a live head-to-head.
+              Arrow Trail packs a board with arrow tiles — tap one and it slides clear only if
+              its path is open. Clear every tile to win, then challenge anyone online to a live
+              head-to-head.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link href="/signup" className="btn btn-primary">

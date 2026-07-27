@@ -141,9 +141,7 @@ create policy "authenticated users can create matches"
 create table if not exists public.match_progress (
   match_id uuid not null references public.matches(id) on delete cascade,
   user_id uuid not null references public.profiles(id) on delete cascade,
-  step int not null default 0,
-  cell_x int not null default 0,
-  cell_y int not null default 0,
+  step int not null default 0, -- tiles cleared so far
   finished_at timestamptz,
   updated_at timestamptz not null default now(),
   primary key (match_id, user_id)

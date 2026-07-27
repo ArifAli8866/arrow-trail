@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { createClient } from "@/lib/supabase/client";
-import MazeBoard from "@/components/MazeBoard";
+import ArrowBoard from "@/components/ArrowBoard";
 
 interface Level {
   id: number;
@@ -24,7 +24,7 @@ export default function PlayLevelPage() {
   const supabase = createClient();
 
   const [level, setLevel] = useState<Level | null>(null);
-  const [result, setResult] = useState<{ timeMs: number; moves: number; stars: number } | null>(null);
+  const [result, setResult] = useState<{ timeMs: number; mistakes: number; stars: number } | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -40,24 +40,26 @@ export default function PlayLevelPage() {
       .then(({ data }) => setLevel(data as Level));
   }, [levelId, supabase]);
 
-  function starsFor(timeMs: number) {
+  function starsFor(timeMs: number, mistakes: number) {
     if (!level) return 1;
     const seconds = timeMs / 1000;
-    if (seconds <= level.par_seconds * 0.7) return 3;
-    if (seconds <= level.par_seconds * 1.15) return 2;
+    const fast = seconds <= level.par_seconds * 0.8;
+    const clean = mistakes === 0;
+    if (fast && clean) return 3;
+    if (seconds <= level.par_seconds * 1.3 && mistakes <= 2) return 2;
     return 1;
   }
 
-  async function handleComplete(timeMs: number, moves: number) {
+  async function handleComplete(timeMs: number, mistakes: number) {
     if (!level || !user) return;
-    const stars = starsFor(timeMs);
-    setResult({ timeMs, moves, stars });
+    const stars = starsFor(timeMs, mistakes);
+    setResult({ timeMs, mistakes, stars });
     setSaving(true);
 
     await supabase
       .from("scores")
       .upsert(
-        { user_id: user.id, level_id: level.id, time_ms: Math.round(timeMs), stars, mistakes: 0 },
+        { user_id: user.id, level_id: level.id, time_ms: Math.round(timeMs), stars, mistakes },
         { onConflict: "user_id,level_id" }
       );
 
@@ -84,7 +86,7 @@ export default function PlayLevelPage() {
         <div className="text-sm text-[var(--ink-dim)]">Par {level.par_seconds}s</div>
       </div>
 
-      <MazeBoard
+      <ArrowBoard
         key={level.id}
         seed={level.seed}
         cols={level.cols}
@@ -97,7 +99,7 @@ export default function PlayLevelPage() {
         <div className="panel mt-6 flex flex-col items-center gap-2 p-6 text-center">
           <div className="text-3xl">{"★".repeat(result.stars) + "☆".repeat(3 - result.stars)}</div>
           <p className="display text-xl font-bold">
-            {(result.timeMs / 1000).toFixed(1)}s · {result.moves} moves
+            {(result.timeMs / 1000).toFixed(1)}s · {result.mistakes} mistakes
           </p>
           <p className="text-sm text-[var(--ink-dim)]">{saving ? "Saving…" : "Saved to your profile"}</p>
           <div className="mt-2 flex gap-3">

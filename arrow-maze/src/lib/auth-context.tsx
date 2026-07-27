@@ -90,11 +90,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, 30_000);
 
     const handleUnload = () => {
-      navigator.sendBeacon &&
+      if (navigator.sendBeacon) {
         navigator.sendBeacon(
           "/api/presence/offline",
           new Blob([JSON.stringify({ id: user.id })], { type: "application/json" })
         );
+      }
     };
     window.addEventListener("beforeunload", handleUnload);
     return () => {

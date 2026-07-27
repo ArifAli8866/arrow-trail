@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { createClient } from "@/lib/supabase/client";
-import MazeBoard from "@/components/MazeBoard";
+import ArrowBoard from "@/components/ArrowBoard";
 import Chat from "@/components/Chat";
 
 interface Match {
@@ -20,8 +20,7 @@ interface Match {
 }
 interface Progress {
   user_id: string;
-  cell_x: number;
-  cell_y: number;
+  step: number; // tiles cleared so far
   finished_at: string | null;
 }
 interface OpponentProfile {
@@ -38,9 +37,10 @@ export default function MatchPage() {
 
   const [match, setMatch] = useState<Match | null>(null);
   const [opponent, setOpponent] = useState<OpponentProfile | null>(null);
-  const [opponentPos, setOpponentPos] = useState<{ x: number; y: number } | null>(null);
+  const [opponentCleared, setOpponentCleared] = useState(0);
   const [opponentFinished, setOpponentFinished] = useState(false);
-  const [myResult, setMyResult] = useState<{ timeMs: number } | null>(null);
+  const [totalTiles, setTotalTiles] = useState(0);
+  const [myResult, setMyResult] = useState<{ timeMs: number; mistakes: number } | null>(null);
   const finishedRef = useRef(false);
 
   useEffect(() => {
@@ -66,15 +66,14 @@ export default function MatchPage() {
       .single()
       .then(({ data }) => setOpponent(data as OpponentProfile));
 
-    // Load any existing progress rows (e.g. on refresh).
     supabase
       .from("match_progress")
-      .select("user_id,cell_x,cell_y,finished_at")
+      .select("user_id,step,finished_at")
       .eq("match_id", match.id)
       .then(({ data }) => {
         const opp = (data as Progress[] | null)?.find((p) => p.user_id === opponentId);
         if (opp) {
-          setOpponentPos({ x: opp.cell_x, y: opp.cell_y });
+          setOpponentCleared(opp.step);
           setOpponentFinished(!!opp.finished_at);
         }
       });
@@ -87,7 +86,7 @@ export default function MatchPage() {
         (payload) => {
           const row = payload.new as Progress;
           if (row.user_id !== opponentId) return;
-          setOpponentPos({ x: row.cell_x, y: row.cell_y });
+          setOpponentCleared(row.step);
           if (row.finished_at) setOpponentFinished(true);
         }
       )
@@ -104,25 +103,24 @@ export default function MatchPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [match?.id, user]);
 
-  async function handleProgress(pos: { x: number; y: number }, _steps: number, atEnd: boolean) {
+  async function handleProgress(cleared: number, total: number, done: boolean) {
     if (!match || !user) return;
+    setTotalTiles(total);
     await supabase.from("match_progress").upsert(
       {
         match_id: match.id,
         user_id: user.id,
-        cell_x: pos.x,
-        cell_y: pos.y,
-        step: _steps,
-        finished_at: atEnd ? new Date().toISOString() : null,
+        step: cleared,
+        finished_at: done ? new Date().toISOString() : null,
       },
       { onConflict: "match_id,user_id" }
     );
   }
 
-  async function handleComplete(timeMs: number) {
+  async function handleComplete(timeMs: number, mistakes: number) {
     if (!match || !user || finishedRef.current) return;
     finishedRef.current = true;
-    setMyResult({ timeMs });
+    setMyResult({ timeMs, mistakes });
 
     // First finisher wins — only write the match result if it's still active.
     const { data: fresh } = await supabase.from("matches").select("status,winner").eq("id", match.id).single();
@@ -135,7 +133,11 @@ export default function MatchPage() {
       const { data: me } = await supabase.from("profiles").select("wins,rating").eq("id", user.id).single();
       const { data: opp } = await supabase.from("profiles").select("losses,rating").eq("id", oppId).single();
       if (me) await supabase.from("profiles").update({ wins: me.wins + 1, rating: me.rating + 20 }).eq("id", user.id);
-      if (opp) await supabase.from("profiles").update({ losses: opp.losses + 1, rating: Math.max(0, opp.rating - 15) }).eq("id", oppId);
+      if (opp)
+        await supabase
+          .from("profiles")
+          .update({ losses: opp.losses + 1, rating: Math.max(0, opp.rating - 15) })
+          .eq("id", oppId);
     }
   }
 
@@ -143,6 +145,7 @@ export default function MatchPage() {
 
   const iWon = match.status === "finished" && match.winner === user?.id;
   const iLost = match.status === "finished" && match.winner && match.winner !== user?.id;
+  const oppPct = totalTiles ? Math.min(100, Math.round((opponentCleared / totalTiles) * 100)) : 0;
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-10">
@@ -170,20 +173,38 @@ export default function MatchPage() {
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         <div>
-          <MazeBoard
+          {/* Opponent's live progress */}
+          <div className="mb-4 flex items-center gap-3">
+            <span
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
+              style={{ background: opponent.avatar_color, color: "#05070c" }}
+            >
+              {opponent.username.slice(0, 2).toUpperCase()}
+            </span>
+            <div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--bg-panel-raised)]">
+              <div
+                className="h-full rounded-full transition-all"
+                style={{ width: `${oppPct}%`, background: opponentFinished ? "var(--trail)" : "var(--spark)" }}
+              />
+            </div>
+            <span className="text-xs text-[var(--ink-dim)]">{opponentFinished ? "Done!" : `${oppPct}%`}</span>
+          </div>
+
+          <ArrowBoard
             key={match.seed}
             seed={match.seed}
             cols={match.cols}
             rows={match.rows}
-            onComplete={(timeMs) => handleComplete(timeMs)}
+            onComplete={handleComplete}
             onProgress={handleProgress}
-            opponentCell={opponentPos}
-            opponentLabel={opponent.username}
             disabled={match.status === "finished"}
           />
+
           {myResult && (
             <div className="panel mt-6 p-5 text-center">
-              <p className="display text-xl font-bold">You finished in {(myResult.timeMs / 1000).toFixed(1)}s</p>
+              <p className="display text-xl font-bold">
+                You finished in {(myResult.timeMs / 1000).toFixed(1)}s · {myResult.mistakes} mistakes
+              </p>
               <p className="mt-1 text-sm text-[var(--ink-dim)]">
                 {opponentFinished ? "Your opponent has finished too." : "Waiting to see if your opponent beats that…"}
               </p>

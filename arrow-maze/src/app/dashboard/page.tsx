@@ -65,7 +65,7 @@ export default function DashboardPage() {
         <div>
           <h1 className="display text-2xl font-bold md:text-3xl">Levels</h1>
           <p className="mt-1 text-sm text-[var(--ink-dim)]">
-            Complete a level to unlock the next. Higher levels get bigger, trickier mazes.
+            Clear every arrow to unlock the next level. Higher levels pack in more tiles.
           </p>
         </div>
         <Link href="/arena" className="btn btn-primary hidden sm:inline-flex">

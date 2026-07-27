@@ -22,7 +22,7 @@ interface ChatProps {
 }
 
 export default function Chat({ peerId, matchId, title = "Chat", compact }: ChatProps) {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const supabase = createClient();
   const [messages, setMessages] = useState<Message[]>([]);
   const [body, setBody] = useState("");
