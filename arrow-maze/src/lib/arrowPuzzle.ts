@@ -63,16 +63,61 @@ function shuffle<T>(arr: T[], rand: () => number): T[] {
   return a;
 }
 
-/** Organic-looking silhouette: cells nearer the center are more likely
- * active; `fill` (0-1) shifts the overall density. Always keeps a solid
- * core so the board never ends up empty or disconnected-looking. */
+/** Dense, organic "creature" silhouette: a wide torso/arms/head band up top
+ * that splits into two leg-like columns lower down, with a light random
+ * jitter at the edges so it doesn't look like a rigid geometric shape.
+ * Much higher fill than a plain rectangle — this is what gives the packed,
+ * interlocking look instead of scattered isolated tiles. */
 function isShapeActive(x: number, y: number, cols: number, rows: number, rand: () => number, fill: number) {
-  const cx = (cols - 1) / 2;
-  const cy = (rows - 1) / 2;
-  const maxDist = Math.sqrt(cx * cx + cy * cy);
-  const dist = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2) / maxDist; // 0..1
-  const prob = fill - dist * 0.5;
-  return rand() < Math.max(0.35, prob);
+  const nx = cols <= 1 ? 0.5 : x / (cols - 1); // 0..1 left->right
+  const ny = rows <= 1 ? 0.5 : y / (rows - 1); // 0..1 top->bottom
+
+  const legSplit = 0.58; // fraction down where legs begin
+  let base: number;
+
+  if (ny < legSplit) {
+    // torso/head/arms: wide, tapering slightly at the very top corners
+    const topTaper = ny < 0.12 ? 1 - Math.abs(nx - 0.5) * 0.9 : 1;
+    const sideTaper = 1 - Math.pow(Math.abs(nx - 0.5) * 2, 6) * 0.35;
+    base = Math.min(topTaper, sideTaper);
+  } else {
+    // legs: two columns with a gap down the middle
+    const legNy = (ny - legSplit) / (1 - legSplit); // 0..1 within leg band
+    const leftLeg = Math.abs(nx - 0.28);
+    const rightLeg = Math.abs(nx - 0.72);
+    const nearestLeg = Math.min(leftLeg, rightLeg);
+    const legWidth = 0.24 - legNy * 0.03;
+    base = nearestLeg < legWidth ? 1 : 0.05;
+  }
+
+  const prob = fill * base;
+  return rand() < Math.max(0, Math.min(1, prob));
+}
+
+/** Region color assignment: partitions active cells into ~5 zones by
+ * nearest anchor point (purely cosmetic, mirrors a layered multi-color
+ * look), returning a palette index per cell. */
+const REGION_ANCHORS = [
+  { x: 0.22, y: 0.22 },
+  { x: 0.5, y: 0.18 },
+  { x: 0.78, y: 0.22 },
+  { x: 0.32, y: 0.78 },
+  { x: 0.68, y: 0.78 },
+];
+
+export function regionIndex(x: number, y: number, cols: number, rows: number): number {
+  const nx = cols <= 1 ? 0.5 : x / (cols - 1);
+  const ny = rows <= 1 ? 0.5 : y / (rows - 1);
+  let best = 0;
+  let bestDist = Infinity;
+  REGION_ANCHORS.forEach((a, i) => {
+    const d = (a.x - nx) ** 2 + (a.y - ny) ** 2;
+    if (d < bestDist) {
+      bestDist = d;
+      best = i;
+    }
+  });
+  return best;
 }
 
 /** Trace from (x,y) in direction d to the board edge, returning the cells
@@ -90,7 +135,7 @@ function rayCells(x: number, y: number, dir: Dir, cols: number, rows: number): {
   return cells;
 }
 
-export function generateBoard(cols: number, rows: number, seed: string, fill = 0.85): Board {
+export function generateBoard(cols: number, rows: number, seed: string, fill = 0.96): Board {
   const rand = mulberry32(hashSeed(seed));
 
   const tiles: Tile[][] = Array.from({ length: rows }, (_, y) =>

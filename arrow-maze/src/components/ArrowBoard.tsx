@@ -6,9 +6,12 @@ import {
   isMovable,
   findMovableTiles,
   remainingCount,
+  regionIndex,
   type Board,
   type Dir,
 } from "@/lib/arrowPuzzle";
+
+const REGION_COLORS = ["#ef4444", "#10b981", "#3b82f6", "#f59e0b", "#a855f7"];
 
 const ARROW_GLYPH: Record<Dir, string> = { N: "↑", S: "↓", E: "→", W: "←" };
 const DELTA: Record<Dir, [number, number]> = { N: [0, -1], S: [0, 1], E: [1, 0], W: [-1, 0] };
@@ -102,11 +105,12 @@ export default function ArrowBoard({
   }
 
   const cellPx = useMemo(() => {
-    // Responsive cell size: shrink on small screens, cap on large ones.
-    if (typeof window === "undefined") return 38;
-    const available = Math.min(window.innerWidth - 48, 480);
-    return Math.max(24, Math.min(42, Math.floor(available / cols)));
-  }, [cols]);
+    if (typeof window === "undefined") return 24;
+    const available = Math.min(window.innerWidth - 32, 620);
+    const byWidth = Math.floor(available / cols);
+    const byHeight = Math.floor((window.innerHeight * 0.55) / rows);
+    return Math.max(14, Math.min(30, Math.min(byWidth, byHeight)));
+  }, [cols, rows]);
 
   if (!board) return null;
 
@@ -126,7 +130,7 @@ export default function ArrowBoard({
       </div>
 
       <div
-        className="grid select-none touch-none gap-[3px] rounded-2xl border border-[var(--line)] bg-[var(--bg-panel)] p-3"
+        className="grid select-none touch-none gap-0 rounded-2xl border border-[var(--line)] bg-[var(--bg-panel)] p-2"
         style={{
           gridTemplateColumns: `repeat(${cols}, ${cellPx}px)`,
           gridTemplateRows: `repeat(${rows}, ${cellPx}px)`,
@@ -146,25 +150,28 @@ export default function ArrowBoard({
             translate = `translate(${dx * cellPx * (cols + rows)}px, ${dy * cellPx * (cols + rows)}px)`;
           }
 
+          const color = REGION_COLORS[regionIndex(tile.x, tile.y, cols, rows)];
+
           return (
             <button
               key={`${tile.x}-${tile.y}`}
               onClick={() => handleTap(tile.x, tile.y)}
               disabled={disabled || finished}
-              className={`flex items-center justify-center rounded-md text-sm font-bold transition-transform ${
+              className={`flex items-center justify-center font-bold leading-none transition-transform ${
                 isShaking ? "animate-[shake_0.32s_ease-in-out]" : ""
               }`}
               style={{
                 width: cellPx,
                 height: cellPx,
-                fontSize: cellPx * 0.5,
-                background: isHint ? "rgba(255,180,84,0.25)" : "var(--bg-panel-raised)",
-                color: isHint ? "var(--spark)" : "var(--ink)",
-                border: `1px solid ${isHint ? "var(--spark)" : "var(--line)"}`,
+                fontSize: cellPx * 0.72,
+                color: isHint ? "var(--spark)" : color,
+                background: isHint ? "rgba(255,180,84,0.25)" : "transparent",
+                borderRadius: isHint ? 4 : 0,
                 transform: translate,
                 transition: isFlying ? "transform 0.22s cubic-bezier(.4,0,.6,1)" : undefined,
                 zIndex: isFlying ? 10 : 1,
                 position: "relative",
+                textShadow: isHint ? undefined : `0 0 6px ${color}55`,
               }}
             >
               {tile.dir ? ARROW_GLYPH[tile.dir] : ""}

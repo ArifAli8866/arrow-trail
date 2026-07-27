@@ -194,8 +194,8 @@ insert into public.levels (index, seed, cols, rows, difficulty, par_seconds)
 select
   i,
   'level-' || i,
-  case when i <= 8 then 7 when i <= 18 then 9 else 11 end,
-  case when i <= 8 then 9 when i <= 18 then 13 else 17 end,
+  case when i <= 8 then 12 when i <= 18 then 16 else 20 end,
+  case when i <= 8 then 16 when i <= 18 then 20 else 26 end,
   case when i <= 8 then 'easy' when i <= 18 then 'medium' when i <= 26 then 'hard' else 'expert' end,
   30 + i * 4
 from generate_series(1, 30) as i

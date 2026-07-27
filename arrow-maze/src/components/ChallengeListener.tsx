@@ -69,7 +69,7 @@ export default function ChallengeListener() {
     const seed = `${incoming.id}-${Date.now()}`;
     const { data: match, error } = await supabase
       .from("matches")
-      .insert({ player_one: incoming.from_user, player_two: user.id, seed, cols: 9, rows: 13 })
+      .insert({ player_one: incoming.from_user, player_two: user.id, seed, cols: 14, rows: 18 })
       .select()
       .single();
 
